@@ -2,7 +2,7 @@ rm(list = ls());
 
 #Pour le modèle G, il faudrait regarder les modifs que j'ai faite mais le mieux est surement de repartir de W corriger et d'y remettre les modif
 #lim par nutri?
-
+#TEST2
 #Il faut comprendre pourquoi A13_CO2atm *diff_CO2+(C13_DIC_inc/(12.01 * H*10^(-6))) différent de 0
 
 #J AI UN PROBLEME DE DISSOLUTION DU 13C_CO2 QUAND ON AUGMENTE LA TEMP, c'est due à mes calculs de fraction entre CO2aq et HCO3
