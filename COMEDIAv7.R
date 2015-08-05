@@ -1,5 +1,5 @@
 #rm(list = ls());
-#lUCIATEST
+
 #Pour le modèle G, il faudrait regarder les modifs que j'ai faite mais le mieux est surement de repartir de W corriger et d'y remettre les modif
 #lim par nutri?
 
@@ -28,7 +28,7 @@
 
 ########################################################Model forcings########################################################
 #What is the model you want to use(F,G,W)?
-model="G"
+model="F"
 
 #Do you want to use the full model with plankton module (FALSE/TRUE)?
 full=FALSE
@@ -54,21 +54,25 @@ HCO2aq=7.5e-6
 HHCO3moins=300e-6   
 
 ########################################################Model Parameters#####################################################
-
-#DOC decomposition rate [d-1] (1/turnover time)
-Kdoc=1./60
-
+#Parameters related to phytoplankton
 #Carbon use efficiency for phytoplankton [no units] 
 CUEphyto=0.00005
 
 #Exudation rates for phytoplankton [fraction of C fixed] 
 Exud= 0.1
 
-#Carbon use efficiency for decomposers [no units] (based on Sinsabaug et al., 2013 Ecology Letters)
-CUEdecomp=0.3
-
 #Mortality rate of the phyto [d-1] 
 Deathphyto=0.00005
+
+#Carrying capacity (gC l-1)
+K=1
+
+#Parameters related to decomposers
+#DOC decomposition rate [d-1] (1/turnover time)
+Kdoc=1./60
+
+#Carbon use efficiency for decomposers [no units] (based on Sinsabaug et al., 2013 Ecology Letters)
+CUEdecomp=0.3
 
 #Mortality rate of the decomposers [d-1] 
 Deathdecomp=0.005
@@ -82,8 +86,7 @@ e=0.5
 #Priming parameters for POC [no units]  (based on Guenet et al., 2012 BG)
 c=47.57
 
-#Carrying capacity (gC l-1)
-K=1
+
         
      
 
