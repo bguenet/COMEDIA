@@ -1,5 +1,5 @@
 #rm(list = ls());
-#lUCIATEST
+
 #Pour le modèle G, il faudrait regarder les modifs que j'ai faite mais le mieux est surement de repartir de W corriger et d'y remettre les modif
 #lim par nutri?
 
