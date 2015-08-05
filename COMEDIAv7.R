@@ -105,7 +105,7 @@ DIC_inc<-c(rep(0,time))
 CO2aq<-c(rep(0,time))
 HCO3moins<-c(rep(0,time))
 CO3_2moins<-c(rep(0,time))
-PHYTO<-c(10^-3,rep(0,time-1))
+if (full) {      PHYTO<-c(10^-3,rep(0,time-1))} else {PHYTO<- c(rep(0,time))}
 #DOC<-c(rep(0,time))
 #POC<-c(rep(0,time))
 #DECOMP<-c(rep(0,time))
