@@ -24,10 +24,10 @@ rm(list = ls());
 
 ########################################################Model forcings########################################################
 #What is the model you want to use(F,G,W)?
-model="C"
+model="B"
 
 #Do you want to use the full model with plankton module (FALSE/TRUE)?
-full=FALSE
+full=TRUE
 
 #Water and air temperature  [K]
 Temperature=273.15+20
@@ -70,6 +70,9 @@ Kdoc=1./60
 #Carbon use efficiency for decomposers [no units] (based on Sinsabaug et al., 2013 Ecology Letters)
 CUEdecomp=0.3
 
+#Fraction of dead biomass going into POC
+Fr_POC=0.5
+
 #Mortality rate of the decomposers [d-1] 
 Deathdecomp=0.005
 
@@ -80,17 +83,18 @@ Kpoc=1./120
 e=0.5
 
 #Priming parameters for POC for models G, W and C [no units]  (based on Guenet et al., 2012 BG)
-c=47.57
+c= 47.57
 
 #Second priming parameters for POC for models C [no units]  
 a=5
 
-        
+ #Plant material decomposition rate [d-1] (1/turnover time)
+Kp=0.0049       
      
 
         
 #duration of the simulation
-time<-365
+time<-3650
 days<-c(1:time)
 time_exp_begin<-10000
 
@@ -110,9 +114,10 @@ if (full) {      PHYTO<-c(10^-3,rep(0,time-1))} else {PHYTO<- c(rep(0,time))}
 #DOC<-c(10^-3,rep(0,time-1))
 #POC<-c(10^-3,rep(0,time-1))
 #DECOMP<-c(10^-3,rep(0,time-1))
-DOC<-c(3,rep(0,time-1))
-POC<-c(3,rep(0,time-1))
-DECOMP<-c(3,rep(0,time-1))
+DOC<-c(0,rep(0,time-1))
+POC<-c(0,rep(0,time-1))
+DECOMP<-c(10^-3,rep(0,time-1))
+PLANT<-c(0,rep(0,time-1))
 
 fc<-c(rep(0,time))
 diff_CO2<-c(rep(0,time))
@@ -132,6 +137,7 @@ C13_PHYTO<-c(0.01083336*PHYTO[1],rep(0,time-1))
 C13_DOC<-c(0.01083336 *DOC[1],rep(0,time-1))
 C13_POC<-c(0.01083336*POC[1], rep(0,time-1))
 C13_DECOMP<-c(0.01083336*DECOMP[1], rep(0,time-1))
+C13_PLANT<-c(0.01083336*PLANT[1], rep(0,time-1))
 C13_diff_CO2<-c(rep(0,time)-1)
 C13_Input_CO2<-c(rep(0,time)-1)
 C13_FrCO2<-c(rep(0,time))
@@ -202,6 +208,7 @@ for (t in 1:(time-1) ) {
         #flux calculation for total C	
         mineralization_poc = Kpoc*POC[t]*(1-exp(-c*DECOMP[t]))* temp_ctrl
         mineralization_doc = Kdoc*DOC[t]* temp_ctrl
+        mineralization_plant = Kp*PLANT[t]* temp_ctrl        
 #mineralization_poc =0
 #mineralization_doc =0
 
@@ -225,20 +232,20 @@ pho[t]<-photosynthesis
         phyto_death=Deathphyto * (PHYTO[t])
         #phyto_death=0
         decomp_death = Deathdecomp*DECOMP[t]
-        het_resp = (mineralization_poc+ mineralization_doc)*CUEdecomp
+        het_resp = (mineralization_poc + mineralization_doc + mineralization_plant)*CUEdecomp
 
 
 
         #update of the pool
         DIC_inc[t+1] = aut_resp + het_resp - photosynthesis 
         PHYTO[t+1] = PHYTO[t] + photosynthesis - phyto_death -exudation - aut_resp
-        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc - decomp_death - het_resp
-        DOC[t+1] = DOC[t]+ exudation - mineralization_doc
-        POC[t+1] = POC[t]+phyto_death + decomp_death - mineralization_poc
+        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc +mineralization_plant - decomp_death - het_resp
+        DOC[t+1] = DOC[t]+ exudation +phyto_death*(1-Fr_POC)+ decomp_death*(1- Fr_POC) - mineralization_doc
+        POC[t+1] = POC[t]+phyto_death* Fr_POC + decomp_death* Fr_POC - mineralization_poc
         CO2ATM[t+1] = CO2ATM[t] + DIC_inc[t+1]/(12.01 * H*10^(-6))
         diff_CO2[t+1]=CO2ATM[t+1]-CO2atm
         CO2ATM[t+1] = CO2atm
-  
+        PLANT[t+1] = PLANT[t]-mineralization_plant
         
         #Whereas all is gC l-1 every *CO2* variables are in ppm
         Input_CO2[t+1]= CO2atm - abs(diff_CO2[t+1])
@@ -264,7 +271,8 @@ pho[t]<-photosynthesis
         discrimination_DOC_mine = 0.0
         discrimination_POC_mine = 0.0
         discrimination_het_resp = 0.0
-        
+        discrimination_PLANT_mine = 0.0
+                
        #We assume no discrimintation due to death
        discrimination_phyto_death = 0.0
        discrimination_decomp_death = 0.0
@@ -286,8 +294,9 @@ pho[t]<-photosynthesis
          
                  
          #flux calculation for 13 C	
-        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) 
-        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) 
+if (POC[t] >0)        {        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) } else {C13_mineralization_poc=0}  
+if (DOC[t] >0)        {        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) } else {C13_mineralization_doc=0}  
+if (PLANT[t] >0)        {C13_mineralization_plant = mineralization_plant*(C13_PLANT[t]/PLANT[t])} else {C13_mineralization_plant=0}         
 #C13_mineralization_poc =0
 #C13_mineralization_doc =0
 
@@ -308,7 +317,7 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         C13_phyto_death=Deathphyto * (C13_PHYTO[t])
         #C13_phyto_death=0
         C13_decomp_death = Deathdecomp*C13_DECOMP[t]
-        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc)*CUEdecomp
+        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc+ C13_mineralization_plant)*CUEdecomp
         
         C13_pho[t]<-C13_photosynthesis 
                        
@@ -323,17 +332,23 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
                                                                     C13_aut_resp -  discrimination_aut_resp*PHYTO[t] 
                                                                    
         C13_DECOMP[t+1] = C13_DECOMP[t]+ C13_mineralization_doc + discrimination_DOC_mine*DOC[t] + 
-                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] - 
+                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] + 
+                                                                        C13_mineralization_plant+ discrimination_PLANT_mine*POC[t] - 
                                                                         C13_decomp_death - discrimination_decomp_death*DECOMP[t] - 
                                                                         C13_het_resp - discrimination_het_resp*DECOMP[t]
                                                                        
-        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] - 
+        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] + 
+                                                       (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*(1-Fr_POC) + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*(1-Fr_POC) - 
                                                          C13_mineralization_doc  - discrimination_DOC_mine*DOC[t]
                                                          
-        C13_POC[t+1] = C13_POC[t]+ C13_phyto_death + discrimination_phyto_death*PHYTO[t] + 
-                                                       C13_decomp_death + discrimination_decomp_death*DECOMP[t] - 
+        C13_POC[t+1] = C13_POC[t]+ (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*Fr_POC + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*Fr_POC - 
                                                        C13_mineralization_poc - discrimination_POC_mine*POC[t]
-                                                       
+
+        C13_PLANT[t+1] = C13_PLANT[t] - C13_mineralization_plant - discrimination_PLANT_mine*PLANT[t]
+
+                                                               
         C13_CO2ATM[t+1] = C13_CO2ATM[t]+ (C13_DIC_inc[t+1]/(12.01 * H*10^(-6)))  + 
                                           discrimination_CO2g_DIC*(DIC_inc[t+1]/(12.01 * H*10^(-6))) + 
                                           A13_CO2atm *abs(diff_CO2[t]) 
@@ -410,6 +425,7 @@ for (t in 1:(time-1) ) {
         #flux calculation for total C	
         mineralization_poc = Kpoc*POC[t]*(1-exp(-c*DOC[t]))* temp_ctrl
         mineralization_doc = Kdoc*DOC[t]* temp_ctrl
+        mineralization_plant = Kp*PLANT[t]* temp_ctrl        
 #mineralization_poc =0
 #mineralization_doc =0
 
@@ -433,19 +449,22 @@ pho[t]<-photosynthesis
         phyto_death=Deathphyto * (PHYTO[t])
         #phyto_death=0
         decomp_death = Deathdecomp*DECOMP[t]
-        het_resp = (mineralization_poc+ mineralization_doc)*CUEdecomp
+        het_resp = (mineralization_poc + mineralization_doc + mineralization_plant)*CUEdecomp
 
 
 
         #update of the pool
         DIC_inc[t+1] = aut_resp + het_resp - photosynthesis 
         PHYTO[t+1] = PHYTO[t] + photosynthesis - phyto_death -exudation - aut_resp
-        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc - decomp_death - het_resp
-        DOC[t+1] = DOC[t]+ exudation - mineralization_doc
-        POC[t+1] = POC[t]+phyto_death + decomp_death - mineralization_poc
+        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc +mineralization_plant - decomp_death - het_resp
+        DOC[t+1] = DOC[t]+ exudation + phyto_death*(1-Fr_POC) + decomp_death*(1- Fr_POC)- mineralization_doc
+        POC[t+1] = POC[t]+phyto_death*Fr_POC + decomp_death*Fr_POC - mineralization_poc
         CO2ATM[t+1] = CO2ATM[t] + DIC_inc[t+1]/(12.01 * H*10^(-6))
         diff_CO2[t+1]=CO2ATM[t+1]-CO2atm
         CO2ATM[t+1] = CO2atm
+        PLANT[t+1] = PLANT[t]-mineralization_plant
+
+
   
         
         #Whereas all is gC l-1 every *CO2* variables are in ppm
@@ -472,7 +491,8 @@ pho[t]<-photosynthesis
         discrimination_DOC_mine = 0.0
         discrimination_POC_mine = 0.0
         discrimination_het_resp = 0.0
-        
+        discrimination_PLANT_mine = 0.0
+                
        #We assume no discrimintation due to death
        discrimination_phyto_death = 0.0
        discrimination_decomp_death = 0.0
@@ -494,8 +514,9 @@ pho[t]<-photosynthesis
          
                  
          #flux calculation for 13 C	
-        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) 
-        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) 
+if (POC[t] >0)        {        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) } else {C13_mineralization_poc=0}  
+if (DOC[t] >0)        {        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) } else {C13_mineralization_doc=0}  
+if (PLANT[t] >0)        {C13_mineralization_plant = mineralization_plant*(C13_PLANT[t]/PLANT[t])} else {C13_mineralization_plant=0}         
 #C13_mineralization_poc =0
 #C13_mineralization_doc =0
 
@@ -516,7 +537,7 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         C13_phyto_death=Deathphyto * (C13_PHYTO[t])
         #C13_phyto_death=0
         C13_decomp_death = Deathdecomp*C13_DECOMP[t]
-        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc)*CUEdecomp
+        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc+ C13_mineralization_plant)*CUEdecomp
         
         C13_pho[t]<-C13_photosynthesis 
                        
@@ -531,17 +552,23 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
                                                                     C13_aut_resp -  discrimination_aut_resp*PHYTO[t] 
                                                                    
         C13_DECOMP[t+1] = C13_DECOMP[t]+ C13_mineralization_doc + discrimination_DOC_mine*DOC[t] + 
-                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] - 
+                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] + 
+                                                                        C13_mineralization_plant+ discrimination_PLANT_mine*POC[t] - 
                                                                         C13_decomp_death - discrimination_decomp_death*DECOMP[t] - 
                                                                         C13_het_resp - discrimination_het_resp*DECOMP[t]
                                                                        
-        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] - 
+        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] + 
+                                                       (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*(1-Fr_POC) + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*(1-Fr_POC) - 
                                                          C13_mineralization_doc  - discrimination_DOC_mine*DOC[t]
                                                          
-        C13_POC[t+1] = C13_POC[t]+ C13_phyto_death + discrimination_phyto_death*PHYTO[t] + 
-                                                       C13_decomp_death + discrimination_decomp_death*DECOMP[t] - 
+        C13_POC[t+1] = C13_POC[t]+ (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*Fr_POC + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*Fr_POC - 
                                                        C13_mineralization_poc - discrimination_POC_mine*POC[t]
-                                                       
+
+        C13_PLANT[t+1] = C13_PLANT[t] - C13_mineralization_plant - discrimination_PLANT_mine*PLANT[t]
+
+                                                               
         C13_CO2ATM[t+1] = C13_CO2ATM[t]+ (C13_DIC_inc[t+1]/(12.01 * H*10^(-6)))  + 
                                           discrimination_CO2g_DIC*(DIC_inc[t+1]/(12.01 * H*10^(-6))) + 
                                           A13_CO2atm *abs(diff_CO2[t]) 
@@ -554,7 +581,10 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
 	                                                 }
 
         # conversion from ppm to gC l-1
-        diff_CO2 = diff_CO2*12.01*10^-6                           }	
+        diff_CO2 = diff_CO2*12.01*10^-6
+                         }	
+        
+
                                               
 ############Model F####################                           
 if (model=="F")   {
@@ -617,6 +647,7 @@ for (t in 1:(time-1) ) {
         #flux calculation for total C	
         mineralization_poc = Kpoc*POC[t]* temp_ctrl
         mineralization_doc = Kdoc*DOC[t]* temp_ctrl
+        mineralization_plant = Kp*PLANT[t]* temp_ctrl 
 #mineralization_poc =0
 #mineralization_doc =0
 
@@ -640,19 +671,20 @@ pho[t]<-photosynthesis
         phyto_death=Deathphyto * (PHYTO[t])
         #phyto_death=0
         decomp_death = Deathdecomp*DECOMP[t]
-        het_resp = (mineralization_poc+ mineralization_doc)*CUEdecomp
+        het_resp = (mineralization_poc + mineralization_doc + mineralization_plant)*CUEdecomp
 
 
 
         #update of the pool
         DIC_inc[t+1] = aut_resp + het_resp - photosynthesis 
         PHYTO[t+1] = PHYTO[t] + photosynthesis - phyto_death -exudation - aut_resp
-        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc - decomp_death - het_resp
-        DOC[t+1] = DOC[t]+ exudation - mineralization_doc
-        POC[t+1] = POC[t]+phyto_death + decomp_death - mineralization_poc
+        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc +mineralization_plant - decomp_death - het_resp
+        DOC[t+1] = DOC[t]+ exudation + phyto_death*(1-Fr_POC) + decomp_death*(1- Fr_POC) - mineralization_doc
+        POC[t+1] = POC[t]+phyto_death*Fr_POC + decomp_death*Fr_POC - mineralization_poc
         CO2ATM[t+1] = CO2ATM[t] + DIC_inc[t+1]/(12.01 * H*10^(-6))
         diff_CO2[t+1]=CO2ATM[t+1]-CO2atm
         CO2ATM[t+1] = CO2atm
+        PLANT[t+1] = PLANT[t]-mineralization_plant        
   
         
         #Whereas all is gC l-1 every *CO2* variables are in ppm
@@ -679,7 +711,8 @@ pho[t]<-photosynthesis
         discrimination_DOC_mine = 0.0
         discrimination_POC_mine = 0.0
         discrimination_het_resp = 0.0
-        
+        discrimination_PLANT_mine = 0.0
+                
        #We assume no discrimintation due to death
        discrimination_phyto_death = 0.0
        discrimination_decomp_death = 0.0
@@ -701,8 +734,9 @@ pho[t]<-photosynthesis
          
                  
          #flux calculation for 13 C	
-        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) 
-        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) 
+if (POC[t] >0)        {        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) } else {C13_mineralization_poc=0}  
+if (DOC[t] >0)        {        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) } else {C13_mineralization_doc=0}  
+if (PLANT[t] >0)        {C13_mineralization_plant = mineralization_plant*(C13_PLANT[t]/PLANT[t])} else {C13_mineralization_plant=0}         
 #C13_mineralization_poc =0
 #C13_mineralization_doc =0
 
@@ -723,7 +757,7 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         C13_phyto_death=Deathphyto * (C13_PHYTO[t])
         #C13_phyto_death=0
         C13_decomp_death = Deathdecomp*C13_DECOMP[t]
-        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc)*CUEdecomp
+        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc+ C13_mineralization_plant)*CUEdecomp
         
         C13_pho[t]<-C13_photosynthesis 
                        
@@ -738,17 +772,23 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
                                                                     C13_aut_resp -  discrimination_aut_resp*PHYTO[t] 
                                                                    
         C13_DECOMP[t+1] = C13_DECOMP[t]+ C13_mineralization_doc + discrimination_DOC_mine*DOC[t] + 
-                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] - 
+                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] + 
+                                                                        C13_mineralization_plant+ discrimination_PLANT_mine*POC[t] - 
                                                                         C13_decomp_death - discrimination_decomp_death*DECOMP[t] - 
                                                                         C13_het_resp - discrimination_het_resp*DECOMP[t]
                                                                        
-        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] - 
+        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] + 
+                                                       (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*(1-Fr_POC) + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*(1-Fr_POC) - 
                                                          C13_mineralization_doc  - discrimination_DOC_mine*DOC[t]
                                                          
-        C13_POC[t+1] = C13_POC[t]+ C13_phyto_death + discrimination_phyto_death*PHYTO[t] + 
-                                                       C13_decomp_death + discrimination_decomp_death*DECOMP[t] - 
+        C13_POC[t+1] = C13_POC[t]+ (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*Fr_POC + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*Fr_POC - 
                                                        C13_mineralization_poc - discrimination_POC_mine*POC[t]
-                                                       
+
+        C13_PLANT[t+1] = C13_PLANT[t] - C13_mineralization_plant - discrimination_PLANT_mine*PLANT[t]
+
+                                                               
         C13_CO2ATM[t+1] = C13_CO2ATM[t]+ (C13_DIC_inc[t+1]/(12.01 * H*10^(-6)))  + 
                                           discrimination_CO2g_DIC*(DIC_inc[t+1]/(12.01 * H*10^(-6))) + 
                                           A13_CO2atm *abs(diff_CO2[t]) 
@@ -824,6 +864,7 @@ for (t in 1:(time-1) ) {
         #flux calculation for total C	
         mineralization_poc = min(POC[t],Kpoc* DECOMP[t]* temp_ctrl)
         mineralization_doc = min(DOC[t],Kdoc* DECOMP[t]* temp_ctrl)
+        mineralization_plant = Kp*PLANT[t]* temp_ctrl
 #mineralization_poc =0
 #mineralization_doc =0
 
@@ -847,20 +888,20 @@ pho[t]<-photosynthesis
         phyto_death=Deathphyto * (PHYTO[t])
         #phyto_death=0
         decomp_death = Deathdecomp*DECOMP[t]
-        het_resp = (mineralization_poc+ mineralization_doc)*CUEdecomp
+        het_resp = (mineralization_poc + mineralization_doc + mineralization_plant)*CUEdecomp
 
 
 
         #update of the pool
         DIC_inc[t+1] = aut_resp + het_resp - photosynthesis 
         PHYTO[t+1] = PHYTO[t] + photosynthesis - phyto_death -exudation - aut_resp
-        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc - decomp_death - het_resp
-        DOC[t+1] = DOC[t]+ exudation - mineralization_doc
-        POC[t+1] = POC[t]+phyto_death + decomp_death - mineralization_poc
+        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc +mineralization_plant - decomp_death - het_resp
+        DOC[t+1] = DOC[t]+ exudation + phyto_death*(1-Fr_POC)+ decomp_death*(1- Fr_POC) - mineralization_doc
+        POC[t+1] = POC[t]+phyto_death*Fr_POC + decomp_death*Fr_POC - mineralization_poc
         CO2ATM[t+1] = CO2ATM[t] + DIC_inc[t+1]/(12.01 * H*10^(-6))
         diff_CO2[t+1]=CO2ATM[t+1]-CO2atm
         CO2ATM[t+1] = CO2atm
-  
+        PLANT[t+1] = PLANT[t]-mineralization_plant  
         
         #Whereas all is gC l-1 every *CO2* variables are in ppm
         Input_CO2[t+1]= CO2atm - abs(diff_CO2[t+1])
@@ -886,7 +927,8 @@ pho[t]<-photosynthesis
         discrimination_DOC_mine = 0.0
         discrimination_POC_mine = 0.0
         discrimination_het_resp = 0.0
-        
+        discrimination_PLANT_mine = 0.0
+                
        #We assume no discrimintation due to death
        discrimination_phyto_death = 0.0
        discrimination_decomp_death = 0.0
@@ -908,8 +950,9 @@ pho[t]<-photosynthesis
          
                  
          #flux calculation for 13 C	
-        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) 
-        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) 
+if (POC[t] >0)        {        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) } else {C13_mineralization_poc=0}  
+if (DOC[t] >0)        {        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) } else {C13_mineralization_doc=0}  
+if (PLANT[t] >0)        {C13_mineralization_plant = mineralization_plant*(C13_PLANT[t]/PLANT[t])} else {C13_mineralization_plant=0}         
 #C13_mineralization_poc =0
 #C13_mineralization_doc =0
 
@@ -930,7 +973,7 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         C13_phyto_death=Deathphyto * (C13_PHYTO[t])
         #C13_phyto_death=0
         C13_decomp_death = Deathdecomp*C13_DECOMP[t]
-        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc)*CUEdecomp
+        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc+ C13_mineralization_plant)*CUEdecomp
         
         C13_pho[t]<-C13_photosynthesis 
                        
@@ -945,17 +988,23 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
                                                                     C13_aut_resp -  discrimination_aut_resp*PHYTO[t] 
                                                                    
         C13_DECOMP[t+1] = C13_DECOMP[t]+ C13_mineralization_doc + discrimination_DOC_mine*DOC[t] + 
-                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] - 
+                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] + 
+                                                                        C13_mineralization_plant+ discrimination_PLANT_mine*POC[t] - 
                                                                         C13_decomp_death - discrimination_decomp_death*DECOMP[t] - 
                                                                         C13_het_resp - discrimination_het_resp*DECOMP[t]
                                                                        
-        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] - 
+        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] + 
+                                                       (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*(1-Fr_POC) + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*(1-Fr_POC) - 
                                                          C13_mineralization_doc  - discrimination_DOC_mine*DOC[t]
                                                          
-        C13_POC[t+1] = C13_POC[t]+ C13_phyto_death + discrimination_phyto_death*PHYTO[t] + 
-                                                       C13_decomp_death + discrimination_decomp_death*DECOMP[t] - 
+        C13_POC[t+1] = C13_POC[t]+ (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*Fr_POC + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*Fr_POC - 
                                                        C13_mineralization_poc - discrimination_POC_mine*POC[t]
-                                                       
+
+        C13_PLANT[t+1] = C13_PLANT[t] - C13_mineralization_plant - discrimination_PLANT_mine*PLANT[t]
+
+                                                               
         C13_CO2ATM[t+1] = C13_CO2ATM[t]+ (C13_DIC_inc[t+1]/(12.01 * H*10^(-6)))  + 
                                           discrimination_CO2g_DIC*(DIC_inc[t+1]/(12.01 * H*10^(-6))) + 
                                           A13_CO2atm *abs(diff_CO2[t]) 
@@ -1031,6 +1080,7 @@ for (t in 1:(time-1) ) {
         #flux calculation for total C	
         mineralization_poc = Kpoc* POC[t]* temp_ctrl+a* POC[t]*(DOC[t]/(DOC[t]+c))
         mineralization_doc = Kdoc* DOC[t]* temp_ctrl
+        mineralization_plant = Kp*PLANT[t]* temp_ctrl
 #mineralization_poc =0
 #mineralization_doc =0
 
@@ -1054,20 +1104,20 @@ pho[t]<-photosynthesis
         phyto_death=Deathphyto * (PHYTO[t])
         #phyto_death=0
         decomp_death = Deathdecomp*DECOMP[t]
-        het_resp = (mineralization_poc+ mineralization_doc)*CUEdecomp
+        het_resp = (mineralization_poc + mineralization_doc + mineralization_plant)*CUEdecomp
 
 
 
         #update of the pool
         DIC_inc[t+1] = aut_resp + het_resp - photosynthesis 
         PHYTO[t+1] = PHYTO[t] + photosynthesis - phyto_death -exudation - aut_resp
-        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc - decomp_death - het_resp
-        DOC[t+1] = DOC[t]+ exudation - mineralization_doc
-        POC[t+1] = POC[t]+phyto_death + decomp_death - mineralization_poc
+        DECOMP[t+1] = DECOMP[t]+ mineralization_doc + mineralization_poc +mineralization_plant - decomp_death - het_resp
+        DOC[t+1] = DOC[t]+ exudation + phyto_death*(1-Fr_POC) + decomp_death*(1- Fr_POC)- mineralization_doc
+        POC[t+1] = POC[t]+phyto_death*Fr_POC + decomp_death*Fr_POC - mineralization_poc
         CO2ATM[t+1] = CO2ATM[t] + DIC_inc[t+1]/(12.01 * H*10^(-6))
         diff_CO2[t+1]=CO2ATM[t+1]-CO2atm
         CO2ATM[t+1] = CO2atm
-  
+        PLANT[t+1] = PLANT[t]-mineralization_plant  
         
         #Whereas all is gC l-1 every *CO2* variables are in ppm
         Input_CO2[t+1]= CO2atm - abs(diff_CO2[t+1])
@@ -1093,7 +1143,8 @@ pho[t]<-photosynthesis
         discrimination_DOC_mine = 0.0
         discrimination_POC_mine = 0.0
         discrimination_het_resp = 0.0
-        
+        discrimination_PLANT_mine = 0.0
+                
        #We assume no discrimintation due to death
        discrimination_phyto_death = 0.0
        discrimination_decomp_death = 0.0
@@ -1115,8 +1166,9 @@ pho[t]<-photosynthesis
          
                  
          #flux calculation for 13 C	
-        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) 
-        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) 
+if (POC[t] >0)        {        C13_mineralization_poc = mineralization_poc*(C13_POC[t]/POC[t]) } else {C13_mineralization_poc=0}  
+if (DOC[t] >0)        {        C13_mineralization_doc = mineralization_doc*(C13_DOC[t]/DOC[t]) } else {C13_mineralization_doc=0}  
+if (PLANT[t] >0)        {C13_mineralization_plant = mineralization_plant*(C13_PLANT[t]/PLANT[t])} else {C13_mineralization_plant=0}         
 #C13_mineralization_poc =0
 #C13_mineralization_doc =0
 
@@ -1137,7 +1189,7 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         C13_phyto_death=Deathphyto * (C13_PHYTO[t])
         #C13_phyto_death=0
         C13_decomp_death = Deathdecomp*C13_DECOMP[t]
-        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc)*CUEdecomp
+        C13_het_resp = (C13_mineralization_poc+ C13_mineralization_doc+ C13_mineralization_plant)*CUEdecomp
         
         C13_pho[t]<-C13_photosynthesis 
                        
@@ -1152,17 +1204,23 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
                                                                     C13_aut_resp -  discrimination_aut_resp*PHYTO[t] 
                                                                    
         C13_DECOMP[t+1] = C13_DECOMP[t]+ C13_mineralization_doc + discrimination_DOC_mine*DOC[t] + 
-                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] - 
+                                                                        C13_mineralization_poc+ discrimination_POC_mine*POC[t] + 
+                                                                        C13_mineralization_plant+ discrimination_PLANT_mine*POC[t] - 
                                                                         C13_decomp_death - discrimination_decomp_death*DECOMP[t] - 
                                                                         C13_het_resp - discrimination_het_resp*DECOMP[t]
                                                                        
-        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] - 
+        C13_DOC[t+1] = C13_DOC[t]+ C13_exudation + discrimination_exudation*PHYTO[t] + 
+                                                       (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*(1-Fr_POC) + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*(1-Fr_POC) - 
                                                          C13_mineralization_doc  - discrimination_DOC_mine*DOC[t]
                                                          
-        C13_POC[t+1] = C13_POC[t]+ C13_phyto_death + discrimination_phyto_death*PHYTO[t] + 
-                                                       C13_decomp_death + discrimination_decomp_death*DECOMP[t] - 
+        C13_POC[t+1] = C13_POC[t]+ (C13_phyto_death + discrimination_phyto_death*PHYTO[t])*Fr_POC + 
+                                                       (C13_decomp_death + discrimination_decomp_death*DECOMP[t])*Fr_POC - 
                                                        C13_mineralization_poc - discrimination_POC_mine*POC[t]
-                                                       
+
+        C13_PLANT[t+1] = C13_PLANT[t] - C13_mineralization_plant - discrimination_PLANT_mine*PLANT[t]
+
+                                                               
         C13_CO2ATM[t+1] = C13_CO2ATM[t]+ (C13_DIC_inc[t+1]/(12.01 * H*10^(-6)))  + 
                                           discrimination_CO2g_DIC*(DIC_inc[t+1]/(12.01 * H*10^(-6))) + 
                                           A13_CO2atm *abs(diff_CO2[t]) 
@@ -1177,10 +1235,11 @@ if (full)  {        C13_photosynthesis = (( rtheta_I  * C13_fc[t])*(1-(PHYTO[t])
         # conversion from ppm to gC l-1
         diff_CO2 = diff_CO2*12.01*10^-6                           }                                                                                             
 ###########################################################Plot the results###################################################
-        
+
+                
 nf<-layout (matrix (1:12,4,3), widths=c(lcm(10), lcm(10), lcm(10)), heights=c(lcm(4),lcm(4),lcm(4),lcm(4)))
- layout.show(nf)
- par(mar=c(0,9,0,0), oma=c(2,0,0,0), las=1, mex=1)
+layout.show(nf)
+par(mar=c(0,9,0,0), oma=c(2,0,0,0), las=1, mex=1)
  
 plot(PHYTO~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
 lines(PHYTO[1: time_exp_begin]~days[1: time_exp_begin], col=1)
@@ -1206,28 +1265,33 @@ lines(POC[1: time_exp_begin]~days[1: time_exp_begin], col=1)
 lines(POC[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
 mtext("POC (gC.l-1)", side=2,line=4,las=0,cex=0.7)
 
-plot(diff_CO2 ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
-lines(diff_CO2[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
-lines(diff_CO2[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
-mtext("CO2 consumption rate (gC.l-1.d-1)", side=2,line=4,las=0, cex=0.7)
+plot(PLANT~days, col=0,ylab="",  cex.axis=0.8, xlab="days")
+lines(PLANT[1: time_exp_begin]~days[1: time_exp_begin], col=1)
+lines(PLANT[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
+mtext("PLANT (gC.l-1)", side=2,line=4,las=0,cex=0.7)
 
-#plot(CO2ATM ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
-#lines(CO2ATM[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
-#lines(CO2ATM[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
-#mtext("CO2 in the atmosphere (ppm)", side=2,line=4,las=0, cex=0.7)
+#plot(diff_CO2 ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
+#lines(diff_CO2[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
+#lines(diff_CO2[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
+#mtext("CO2 consumption rate (gC.l-1.d-1)", side=2,line=4,las=0, cex=0.7)
+
+plot(CO2ATM ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
+lines(CO2ATM[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
+lines(CO2ATM[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
+mtext("CO2 in the atmosphere (ppm)", side=2,line=4,las=0, cex=0.7)
 
 plot(DIC[2:time-1] ~days[2:time-1], col=0,ylab="",  cex.axis=0.8, xaxt="n")
 lines(DIC[2: time_exp_begin]~days[2: time_exp_begin], col=1)
 lines(DIC[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
 mtext("DIC (gC.l-1)", side=2,line=4,las=0,cex=0.7)
 
-A<-C13_CO2ATM/CO2ATM
-delta = (((A/(1-A))/0.0112372)-1)*1000
+#A<-C13_CO2ATM/CO2ATM
+#delta = (((A/(1-A))/0.0112372)-1)*1000
 #delta=C13_CO2ATM
-plot(delta ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
-lines(delta[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
-lines(delta[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
-mtext("∂13C-CO2", side=2,line=4,las=0,cex=0.7)
+#plot(delta ~days, col=0,ylab="",  cex.axis=0.8, xaxt="n")
+#lines(delta[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
+#lines(delta[time_exp_begin:time] ~days[time_exp_begin:time], col=2)
+#mtext("∂13C-CO2", side=2,line=4,las=0,cex=0.7)
 
 A<-C13_DIC/DIC
 delta = (((A/(1-A))/0.0112372)-1)*1000
@@ -1261,6 +1325,14 @@ lines(delta[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
 lines(delta[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
 mtext("∂13C-DECOMP", side=2,line=4,las=0, cex=0.7)
 
+A<-C13_PLANT/PLANT
+delta = (((A/(1-A))/0.0112372)-1)*1000
+#delta=C13_DECOMP
+#plot(delta ~days, col=0,ylab="",  cex.axis=0.8, , xaxt="n")
+#lines(delta[1: time_exp_begin] ~days[1: time_exp_begin], col=1)
+#lines(delta[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
+#mtext("∂13C-PLANT", side=2,line=4,las=0, cex=0.7)
+
 A<-C13_PHYTO/PHYTO
 delta = (((A/(1-A))/0.0112372)-1)*1000
 #delta=C13_PHYTO
@@ -1270,9 +1342,10 @@ lines(delta[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
 mtext("∂13C-PHYTO", side=2,line=4,las=0, cex=0.7)
 
 ###########################################################Export the results#####################################################
-
+out_model<-data.frame(DECOMP,DOC,POC)
 #write.table(out_model_G,'out_modelG.txt',row.names=FALSE,col.names=FALSE)
-#write.table(out_model_W,'out_modelW.txt',row.names=FALSE,col.names=FALSE)
+name=paste("out_model",model,"_",Temperature,"deg_",DOC[1],"gl.txt",sep="")
+write.table(out_model,name,row.names=FALSE,col.names=TRUE)
 
 #write.table(out_model_G_temp_inc ,'out_modelG.txt',row.names=FALSE,col.names=FALSE)
 #write.table(out_model_W_temp_inc ,'out_modelW.txt',row.names=FALSE,col.names=FALSE)
