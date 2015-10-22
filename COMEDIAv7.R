@@ -24,7 +24,7 @@ rm(list = ls());
 
 ########################################################Model forcings########################################################
 #What is the model you want to use(F,G,W)?
-model="B"
+model="G"
 
 #Do you want to use the full model with plankton module (FALSE/TRUE)?
 full=TRUE
