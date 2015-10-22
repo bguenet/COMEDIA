@@ -30,7 +30,7 @@ model="G"
 full=TRUE
 
 #Water and air temperature  [K]
-Temperature=273.15+20
+Temperature=273.15+25
 
 #Water pH
 pH=6.4
@@ -1336,10 +1336,10 @@ delta = (((A/(1-A))/0.0112372)-1)*1000
 A<-C13_PHYTO/PHYTO
 delta = (((A/(1-A))/0.0112372)-1)*1000
 #delta=C13_PHYTO
-plot(delta ~days, col=0,ylab="",  cex.axis=0.8, xlab="days")
-lines(delta[2: time_exp_begin] ~days[2: time_exp_begin], col=1)
-lines(delta[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
-mtext("∂13C-PHYTO", side=2,line=4,las=0, cex=0.7)
+#plot(delta ~days, col=0,ylab="",  cex.axis=0.8, xlab="days")
+#lines(delta[2: time_exp_begin] ~days[2: time_exp_begin], col=1)
+#lines(delta[time_exp_begin:time-1] ~days[time_exp_begin:time-1], col=2)
+#mtext("∂13C-PHYTO", side=2,line=4,las=0, cex=0.7)
 
 ###########################################################Export the results#####################################################
 out_model<-data.frame(DECOMP,DOC,POC)
